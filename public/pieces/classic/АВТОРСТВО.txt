@@ -1,0 +1,5 @@
+Классические фигуры Cburnett. Автор: Colin M. L. Burnett.
+Источник SVG: https://github.com/lichess-org/lila/tree/master/public/piece/cburnett
+Лицензия upstream: GNU GPL v2 или новее; распространяются здесь под GPL v3 (ЛИЦЕНЗИЯ.txt).
+Основание: https://github.com/lichess-org/lila/blob/master/COPYING.md
+Файлы SVG не изменены. Получены 23 октября 2026 года.

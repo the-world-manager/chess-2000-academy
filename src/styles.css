@@ -2096,3 +2096,63 @@ tr:hover td {
     width: min(100%, calc(100dvh - 280px));
   }
 }
+
+/* Ледяная доска: оформление по выбранному владельцем образцу. */
+.chessboard {
+  --coordinate-space: clamp(16px, 2vw, 24px);
+  box-sizing: border-box;
+  padding: 0 0 var(--coordinate-space) var(--coordinate-space);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: #302e2b;
+}
+.square.light,
+.square.light:hover:not(:disabled) {
+  background-color: #dce7eb;
+}
+.square.dark,
+.square.dark:hover:not(:disabled) {
+  background-color: #7b9faf;
+}
+.square.light,
+.square.dark {
+  background-image: url('/boards/ice-texture.svg');
+  background-size: 800% 800%;
+  background-blend-mode: soft-light;
+}
+.square.last-move {
+  box-shadow: inset 0 0 0 100px #c6d84b4d;
+}
+.square.selected,
+.square.selected:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 100px #e4ce6199;
+}
+.chessboard .rank,
+.chessboard .file {
+  color: #a8a6a2;
+  font-size: clamp(10px, 1.3vw, 15px);
+  font-weight: 600;
+  pointer-events: none;
+  line-height: var(--coordinate-space);
+  text-align: center;
+}
+.chessboard .rank {
+  top: 50%;
+  left: calc(-1 * var(--coordinate-space));
+  width: var(--coordinate-space);
+  transform: translateY(-50%);
+}
+.chessboard .file {
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--coordinate-space));
+}
+.square .piece {
+  width: 96%;
+  height: 96%;
+}
+.piece-svg {
+  filter: none;
+  object-fit: contain;
+}
