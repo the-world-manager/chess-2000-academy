@@ -3,7 +3,6 @@ import express, {
   type Response,
   type NextFunction,
 } from "express";
-import { DatabaseSync } from "node:sqlite";
 import {
   randomBytes,
   scryptSync,
@@ -11,49 +10,111 @@ import {
   createHash,
 } from "node:crypto";
 import { Chess } from "chess.js";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-
+import {
+  migrate,
+  sqliteStorage,
+  type Storage,
+  type Transaction,
+} from "./storage.js";
 const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const cookieName = "academy_session";
 const sessionLife = 7 * 24 * 60 * 60 * 1000;
-const initialFen = new Chess().fen();
-function passwordHash(password: string, salt: string) {
-  return scryptSync(password, salt, 64);
+export const passwordHash = (password: string, salt: string) =>
+  scryptSync(password, salt, 64);
+class HttpError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
 }
-
-export function createApplication(filename: string, secureCookies = false) {
-  if (filename !== ":memory:")
-    mkdirSync(dirname(filename), { recursive: true, mode: 0o700 });
-  const db = new DatabaseSync(filename);
-  db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY, login TEXT NOT NULL UNIQUE, salt TEXT NOT NULL, password_hash TEXT NOT NULL,
-      chess_username TEXT NOT NULL DEFAULT 'alexander_gusev', start_rating INTEGER NOT NULL DEFAULT 1437,
-      target_rating INTEGER NOT NULL DEFAULT 2000, created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS sessions (
-      token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS board_states (
-      user_id INTEGER PRIMARY KEY REFERENCES users(id), pgn TEXT NOT NULL DEFAULT '', fen TEXT NOT NULL,
-      notes TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL);
-    PRAGMA user_version=1;`);
+type Board = {
+  pgn: string;
+  fen: string;
+  notes: string;
+  revision: number;
+  updated_at: string;
+};
+export interface AppOptions {
+  secureCookies?: boolean;
+  publicDeployment?: boolean;
+  ownerLogin?: string;
+  ownerPassword?: string;
+}
+function validOwner(login: unknown, password: unknown): login is string {
+  return (
+    typeof login === "string" &&
+    /^[a-zA-Z0-9_-]{3,40}$/.test(login) &&
+    typeof password === "string" &&
+    password.length >= 12 &&
+    password.length <= 128
+  );
+}
+async function insertOwner(tx: Transaction, login: string, password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const now = new Date().toISOString();
+  await tx.query(
+    "INSERT INTO users(id,login,salt,password_hash,created_at) VALUES(1,$1,$2,$3,$4)",
+    [login, salt, passwordHash(password, salt).toString("hex"), now],
+  );
+  await tx.query(
+    "INSERT INTO board_states(user_id,fen,updated_at) VALUES(1,$1,$2)",
+    [new Chess().fen(), now],
+  );
+}
+export async function createApplication(
+  database: string | Storage,
+  options: AppOptions | boolean = {},
+) {
+  const opts =
+    typeof options === "boolean" ? { secureCookies: options } : options;
+  const db = typeof database === "string" ? sqliteStorage(database) : database;
+  try {
+    await migrate(db);
+    if (opts.ownerLogin !== undefined || opts.ownerPassword !== undefined) {
+      if (!validOwner(opts.ownerLogin, opts.ownerPassword))
+        throw new Error(
+          "Начальный логин должен содержать 3–40 латинских букв, цифр, «_» или «-», пароль — 12–128 символов.",
+        );
+      await db.transaction(async (tx) => {
+        if (db.kind === "postgres")
+          await tx.query("SELECT pg_advisory_xact_lock(20001437)");
+        if (!(await tx.query("SELECT id FROM users LIMIT 1")).rows.length)
+          await insertOwner(tx, opts.ownerLogin!, opts.ownerPassword!);
+      });
+    }
+    if (
+      opts.publicDeployment &&
+      !(await db.query("SELECT id FROM users LIMIT 1")).rows.length
+    ) {
+      throw new Error(
+        "Перед публикацией задайте начальные настройки владельца или перенесите существующий профиль.",
+      );
+    }
+  } catch (error) {
+    await db.close();
+    throw error;
+  }
   const app = express();
   app.disable("x-powered-by");
+  if (opts.publicDeployment) app.set("trust proxy", 1);
   app.use(express.json({ limit: "32kb" }));
   app.use("/api", (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    // Same-origin JSON writes, including account setup and sign-in, prevent cross-site writes.
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       const origin = req.get("origin");
       let sameOrigin = !origin;
       try {
-        if (origin) sameOrigin = new URL(origin).host === req.get("host");
+        if (origin)
+          sameOrigin =
+            new URL(origin).origin === `${req.protocol}://${req.get("host")}`;
       } catch {
         sameOrigin = false;
       }
-      if (req.get("sec-fetch-site") === "cross-site" || !sameOrigin) {
+      if (!sameOrigin || req.get("sec-fetch-site") === "cross-site") {
         res.status(403).json({ error: "Запрос с другого сайта запрещён." });
         return;
       }
@@ -61,201 +122,183 @@ export function createApplication(filename: string, secureCookies = false) {
         res.status(415).json({ error: "Ожидается запрос в формате JSON." });
         return;
       }
+      if (
+        !req.body ||
+        typeof req.body !== "object" ||
+        Array.isArray(req.body)
+      ) {
+        res.status(400).json({ error: "Некорректный формат запроса." });
+        return;
+      }
     }
     next();
   });
-  const attempts = new Map<string, { count: number; reset: number }>();
-  const authLimit = (req: Request, res: Response, next: NextFunction) => {
-    const key = req.ip || "local";
-    const now = Date.now();
-    let entry = attempts.get(key);
-    if (!entry || now > entry.reset) {
-      entry = { count: 0, reset: now + 15 * 60_000 };
-      attempts.set(key, entry);
-    }
-    if (++entry.count > 15) {
-      res
-        .status(429)
-        .json({ error: "Слишком много попыток. Повторите через 15 минут." });
-      return;
-    }
-    next();
-  };
-  const sessionUser = (req: Request): number | undefined => {
-    const raw = req.headers.cookie
+  const tokenFrom = (req: Request) =>
+    req.headers.cookie
       ?.split(";")
       .map((s) => s.trim())
       .find((s) => s.startsWith(`${cookieName}=`))
       ?.slice(cookieName.length + 1);
-    if (!raw) return;
-    const row = db
-      .prepare(
-        "SELECT user_id FROM sessions WHERE token_hash=? AND expires_at>?",
-      )
-      .get(digest(raw), Date.now());
-    return row?.user_id as number | undefined;
+  const sessionUser = async (req: Request) => {
+    const token = tokenFrom(req);
+    if (!token) return undefined;
+    const result = await db.query<{ user_id: number }>(
+      "SELECT user_id FROM sessions WHERE token_hash=$1 AND expires_at>$2",
+      [digest(token), Date.now()],
+    );
+    return result.rows[0]?.user_id;
   };
-  function authorize(req: Request, res: Response, next: NextFunction) {
-    const user = sessionUser(req);
-    if (!user) {
-      res.status(401).json({ error: "Войдите, чтобы открыть личные данные." });
-      return;
-    }
+  const authorize = async (req: Request, res: Response, next: NextFunction) => {
+    const user = await sessionUser(req);
+    if (!user)
+      throw new HttpError(401, "Войдите, чтобы открыть личные данные.");
     res.locals.userId = user;
     next();
-  }
-  function signIn(res: Response, userId: number) {
-    db.prepare("DELETE FROM sessions WHERE expires_at<=?").run(Date.now());
+  };
+  const cookieOptions = {
+    httpOnly: true,
+    sameSite: "strict" as const,
+    secure: !!opts.secureCookies,
+    path: "/",
+  };
+  async function signIn(res: Response, userId: number) {
     const token = randomBytes(32).toString("hex");
-    db.prepare("INSERT INTO sessions VALUES (?, ?, ?)").run(
-      digest(token),
-      userId,
-      Date.now() + sessionLife,
-    );
-    res.cookie(cookieName, token, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: secureCookies,
-      maxAge: sessionLife,
-      path: "/",
+    await db.transaction(async (tx) => {
+      await tx.query("DELETE FROM sessions WHERE expires_at<=$1", [Date.now()]);
+      await tx.query(
+        "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)",
+        [digest(token), userId, Date.now() + sessionLife],
+      );
     });
+    res.cookie(cookieName, token, { ...cookieOptions, maxAge: sessionLife });
   }
+  async function authLimit(req: Request, _res: Response, next: NextFunction) {
+    const now = Date.now();
+    const { rows } = await db.query<{ attempts: number }>(
+      `INSERT INTO auth_attempts(client_hash,attempts,expires_at) VALUES($1,1,$2)
+      ON CONFLICT(client_hash) DO UPDATE SET attempts=CASE WHEN auth_attempts.expires_at<=$3 THEN 1 ELSE auth_attempts.attempts+1 END,
+      expires_at=CASE WHEN auth_attempts.expires_at<=$3 THEN $2 ELSE auth_attempts.expires_at END RETURNING attempts`,
+      [digest(req.ip || "local"), now + 15 * 60_000, now],
+    );
+    if (rows[0].attempts > 15)
+      throw new HttpError(
+        429,
+        "Слишком много попыток. Повторите через 15 минут.",
+      );
+    next();
+  }
+  // Health check Render не обращается к Neon и не мешает бесплатному scale-to-zero.
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
-  app.get("/api/auth", (req, res) =>
+  app.get("/api/ready", async (_req, res) => {
+    await db.query("SELECT 1");
+    res.json({ ok: true });
+  });
+  app.get("/api/auth", async (req, res) =>
     res.json({
-      initialized: !!db.prepare("SELECT id FROM users LIMIT 1").get(),
-      authenticated: !!sessionUser(req),
+      initialized: !!(await db.query("SELECT id FROM users LIMIT 1")).rows
+        .length,
+      authenticated: !!(await sessionUser(req)),
     }),
   );
-  app.post("/api/setup", authLimit, (req, res) => {
+  app.post("/api/setup", authLimit, async (req, res) => {
+    if (opts.publicDeployment)
+      throw new HttpError(
+        403,
+        "Первичная настройка выполняется через защищённые переменные сервера. Войдите с логином владельца.",
+      );
     const { login, password } = req.body ?? {};
-    if (
-      typeof login !== "string" ||
-      !/^[a-zA-Z0-9_-]{3,40}$/.test(login) ||
-      typeof password !== "string" ||
-      password.length < 12 ||
-      password.length > 128
-    ) {
-      res.status(400).json({
-        error:
-          "Логин: 3–40 латинских букв, цифр, «_» или «-». Пароль: 12–128 символов.",
-      });
-      return;
-    }
-    // BEGIN IMMEDIATE also serializes first-owner creation across application processes.
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      if (db.prepare("SELECT id FROM users LIMIT 1").get()) {
-        db.exec("ROLLBACK");
-        res
-          .status(409)
-          .json({ error: "Владелец уже создан. Войдите в аккаунт." });
-        return;
-      }
-      const salt = randomBytes(16).toString("hex");
-      const createdAt = new Date().toISOString();
-      const result = db
-        .prepare(
-          "INSERT INTO users(login,salt,password_hash,created_at) VALUES(?,?,?,?)",
-        )
-        .run(
-          login,
-          salt,
-          passwordHash(password, salt).toString("hex"),
-          createdAt,
-        );
-      const userId = Number(result.lastInsertRowid);
-      db.prepare(
-        "INSERT INTO board_states(user_id,fen,updated_at) VALUES(?,?,?)",
-      ).run(userId, initialFen, createdAt);
-      db.exec("COMMIT");
-      signIn(res, userId);
-      res.status(201).json({ ok: true });
-    } catch (err) {
-      db.exec("ROLLBACK");
-      throw err;
-    }
-  });
-  app.post("/api/login", authLimit, (req, res) => {
-    const { login, password } = req.body ?? {};
-    if (
-      typeof login !== "string" ||
-      typeof password !== "string" ||
-      password.length > 128
-    ) {
-      res.status(400).json({ error: "Введите логин и пароль." });
-      return;
-    }
-    const user = db
-      .prepare("SELECT id,salt,password_hash FROM users WHERE login=?")
-      .get(login);
-    const actual = passwordHash(
-      password,
-      (user?.salt as string) || "missing-account-salt",
-    );
-    const expected = user
-      ? Buffer.from(user.password_hash as string, "hex")
-      : Buffer.alloc(64);
-    if (!timingSafeEqual(actual, expected) || !user) {
-      res.status(401).json({ error: "Неверный логин или пароль." });
-      return;
-    }
-    signIn(res, Number(user.id));
-    res.json({ ok: true });
-  });
-  app.post("/api/logout", authorize, (req, res) => {
-    const token = req.headers.cookie
-      ?.split(";")
-      .map((s) => s.trim())
-      .find((s) => s.startsWith(`${cookieName}=`))
-      ?.slice(cookieName.length + 1);
-    if (token)
-      db.prepare("DELETE FROM sessions WHERE token_hash=?").run(digest(token));
-    res.clearCookie(cookieName, {
-      path: "/",
-      httpOnly: true,
-      sameSite: "strict",
-      secure: secureCookies,
+    if (!validOwner(login, password))
+      throw new HttpError(
+        400,
+        "Логин: 3–40 латинских букв, цифр, «_» или «-». Пароль: 12–128 символов.",
+      );
+    await db.transaction(async (tx) => {
+      if (db.kind === "postgres")
+        await tx.query("SELECT pg_advisory_xact_lock(20001437)");
+      if ((await tx.query("SELECT id FROM users LIMIT 1")).rows.length)
+        throw new HttpError(409, "Владелец уже создан. Войдите в аккаунт.");
+      await insertOwner(tx, login, password);
     });
+    await signIn(res, 1);
+    res.status(201).json({ ok: true });
+  });
+  app.post("/api/login", authLimit, async (req, res) => {
+    const { login, password } = req.body ?? {};
+    if (
+      typeof login !== "string" ||
+      login.length > 40 ||
+      typeof password !== "string" ||
+      password.length > 128
+    )
+      throw new HttpError(400, "Введите логин и пароль.");
+    const { rows } = await db.query<{
+      id: number;
+      salt: string;
+      password_hash: string;
+    }>("SELECT id,salt,password_hash FROM users WHERE login=$1", [login]);
+    const user = rows[0];
+    const actual = passwordHash(password, user?.salt || "missing-account-salt");
+    const expected = user
+      ? Buffer.from(user.password_hash, "hex")
+      : Buffer.alloc(64);
+    if (
+      expected.length !== actual.length ||
+      !timingSafeEqual(actual, expected) ||
+      !user
+    )
+      throw new HttpError(401, "Неверный логин или пароль.");
+    await signIn(res, user.id);
     res.json({ ok: true });
   });
-  app.get("/api/profile", authorize, (_req, res) => {
-    const row = db
-      .prepare(
-        "SELECT login,chess_username,start_rating,target_rating,created_at FROM users WHERE id=?",
-      )
-      .get(res.locals.userId);
-    res.json(row);
+  app.post("/api/logout", authorize, async (req, res) => {
+    await db.query("DELETE FROM sessions WHERE token_hash=$1", [
+      digest(tokenFrom(req)!),
+    ]);
+    res.clearCookie(cookieName, cookieOptions);
+    res.json({ ok: true });
   });
-  const readBoard = (userId: number) =>
-    db
-      .prepare(
-        "SELECT pgn,fen,notes,revision,updated_at FROM board_states WHERE user_id=?",
-      )
-      .get(userId)!;
-  app.get("/api/board", authorize, (_req, res) =>
-    res.json(readBoard(res.locals.userId)),
+  app.get("/api/profile", authorize, async (_req, res) =>
+    res.json(
+      (
+        await db.query(
+          "SELECT login,chess_username,start_rating,target_rating,created_at FROM users WHERE id=$1",
+          [res.locals.userId],
+        )
+      ).rows[0],
+    ),
   );
-  app.post("/api/board", authorize, (req, res) => {
-    const old = readBoard(res.locals.userId);
+  const readBoard = async (userId: number) => {
+    const { rows } = await db.query<Board>(
+      "SELECT pgn,fen,notes,revision,updated_at FROM board_states WHERE user_id=$1",
+      [userId],
+    );
+    if (!rows[0])
+      throw new HttpError(
+        503,
+        "Не найдена сохранённая доска. Проверьте перенос данных.",
+      );
+    return rows[0];
+  };
+  app.get("/api/board", authorize, async (_req, res) =>
+    res.json(await readBoard(res.locals.userId)),
+  );
+  app.post("/api/board", authorize, async (req, res) => {
+    const old = await readBoard(res.locals.userId);
     const { revision, action } = req.body ?? {};
-    if (!Number.isInteger(revision) || revision !== old.revision) {
-      res.status(409).json({
-        error: "Позиция изменена в другом окне. Обновите доску перед повтором.",
-      });
-      return;
-    }
+    if (!Number.isInteger(revision) || revision !== old.revision)
+      throw new HttpError(
+        409,
+        "Позиция изменена в другом окне. Обновите доску перед повтором.",
+      );
     const chess = new Chess();
-    if (old.pgn) chess.loadPgn(old.pgn as string);
-    let notes = old.notes as string;
+    if (old.pgn) chess.loadPgn(old.pgn);
+    let notes = old.notes;
     if (action === "move") {
-      if (chess.isGameOver()) {
-        res.status(400).json({
-          error:
-            "Партия завершена. Начните новую партию или отмените последний ход.",
-        });
-        return;
-      }
+      if (chess.isGameOver())
+        throw new HttpError(
+          400,
+          "Партия завершена. Начните новую партию или отмените последний ход.",
+        );
       const { from, to, promotion } = req.body;
       if (
         typeof from !== "string" ||
@@ -263,69 +306,74 @@ export function createApplication(filename: string, secureCookies = false) {
         !/^[a-h][1-8]$/.test(from) ||
         !/^[a-h][1-8]$/.test(to) ||
         (promotion !== undefined && !["q", "r", "b", "n"].includes(promotion))
-      ) {
-        res.status(400).json({ error: "Некорректные координаты хода." });
-        return;
-      }
+      )
+        throw new HttpError(400, "Некорректные координаты хода.");
       try {
         chess.move({ from, to, promotion });
       } catch {
-        res
-          .status(400)
-          .json({ error: "Этот ход невозможен по правилам шахмат." });
-        return;
+        throw new HttpError(400, "Этот ход невозможен по правилам шахмат.");
       }
     } else if (action === "undo") {
-      if (!chess.undo()) {
-        res.status(400).json({ error: "На доске ещё нет ходов." });
-        return;
-      }
+      if (!chess.undo()) throw new HttpError(400, "На доске ещё нет ходов.");
     } else if (action === "reset") chess.reset();
     else if (action === "notes") {
-      if (typeof req.body.notes !== "string" || req.body.notes.length > 10000) {
-        res.status(400).json({
-          error: "Заметка должна содержать не более 10 000 символов.",
-        });
-        return;
-      }
-      notes = req.body.notes;
-    } else {
-      res.status(400).json({ error: "Неизвестное действие с доской." });
-      return;
-    }
-    const result = db
-      .prepare(
-        "UPDATE board_states SET pgn=?,fen=?,notes=?,revision=revision+1,updated_at=? WHERE user_id=? AND revision=?",
+      if (
+        typeof req.body.notes !== "string" ||
+        req.body.notes.length > 10000 ||
+        req.body.notes.includes("\0")
       )
-      .run(
+        throw new HttpError(
+          400,
+          "Заметка должна содержать не более 10 000 символов и не должна содержать нулевой символ.",
+        );
+      notes = req.body.notes;
+    } else throw new HttpError(400, "Неизвестное действие с доской.");
+    const result = await db.query<Board>(
+      `UPDATE board_states SET pgn=$1,fen=$2,notes=$3,revision=revision+1,updated_at=$4
+      WHERE user_id=$5 AND revision=$6 RETURNING pgn,fen,notes,revision,updated_at`,
+      [
         chess.history().length ? chess.pgn() : "",
         chess.fen(),
         notes,
         new Date().toISOString(),
         res.locals.userId,
         revision,
-      );
-    if (!result.changes) {
-      res.status(409).json({ error: "Позиция уже изменена. Обновите доску." });
-      return;
-    }
-    res.json(readBoard(res.locals.userId));
+      ],
+    );
+    if (!result.changes)
+      throw new HttpError(409, "Позиция уже изменена. Обновите доску.");
+    res.json(result.rows[0]);
   });
   app.use("/api", (_req, res) =>
     res.status(404).json({ error: "Такой запрос не поддерживается." }),
   );
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    const badJson = err instanceof SyntaxError;
-    res.status(badJson ? 400 : 500).json({
-      error: badJson
-        ? "Некорректный формат запроса."
-        : "Не удалось выполнить запрос. Повторите позже.",
-    });
-    if (!badJson)
-      console.error(
-        "Ошибка серверного запроса:",
-        err instanceof Error ? err.message : "неизвестная ошибка",
-      );
-  });
+  app.use(
+    (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+      if (error instanceof HttpError) {
+        res.status(error.status).json({ error: error.message });
+        return;
+      }
+      if (error instanceof SyntaxError) {
+        res.status(400).json({ error: "Некорректный формат запроса." });
+        return;
+      }
+      if (
+        error &&
+        typeof error === "object" &&
+        "type" in error &&
+        error.type === "entity.too.large"
+      ) {
+        res
+          .status(413)
+          .json({ error: "Запрос слишком большой. Максимум — 32 КБ." });
+        return;
+      }
+      // Не выводим строки подключения, SQL, пароли или содержимое личных записей.
+      console.error("Не удалось выполнить запрос к базе данных.");
+      res.status(503).json({
+        error: "База данных временно недоступна. Повторите запрос позже.",
+      });
+    },
+  );
   return { app, close: () => db.close() };
 }

@@ -5,3 +5,7 @@ data/
 *.log
 test-results/
 playwright-report/
+.wrangler/
+dist-worker/
+.env.*
+!.env.example

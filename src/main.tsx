@@ -262,7 +262,7 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
                   <dt>Цель</dt>
                   <dd>2000 Rapid · 12 месяцев</dd>
                   <dt>Хранение</dt>
-                  <dd>Серверная база SQLite</dd>
+                  <dd>Постоянная серверная база данных</dd>
                 </dl>
                 <p className="muted">
                   Актуальный рейтинг появится после подключения Chess.com. В

@@ -1,0 +1,26 @@
+# Создаётся только бесплатный веб-сервис. База Neon подключается отдельно.
+services:
+  - type: web
+    name: chess-2000-academy
+    runtime: node
+    plan: free
+    numInstances: 1
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: OWNER_LOGIN
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false

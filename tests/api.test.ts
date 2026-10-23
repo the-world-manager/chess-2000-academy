@@ -7,7 +7,11 @@ import { createApplication } from "../server/app.js";
 import type { Server } from "node:http";
 
 async function start(file = ":memory:") {
-  const application = createApplication(file);
+  const database =
+    process.env.TEST_BACKEND === "postgres"
+      ? await (await import("./helpers/postgres.js")).testPostgres(file)
+      : file;
+  const application = await createApplication(database);
   const server: Server = await new Promise((resolve) => {
     const s = application.app.listen(0, "127.0.0.1", () => resolve(s));
   });
@@ -42,7 +46,7 @@ async function start(file = ":memory:") {
       await new Promise<void>((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve())),
       );
-      application.close();
+      await application.close();
     },
   };
 }
@@ -143,7 +147,7 @@ test("Личный API: авторизация, защита запросов, �
     await instance.stop();
   }
 });
-test("SQLite сохраняет позицию, заметку, профиль и сеанс после закрытия и повторного открытия сервера", async () => {
+test(`${process.env.TEST_BACKEND === "postgres" ? "PostgreSQL" : "SQLite"} сохраняет позицию, заметку, профиль и сеанс после закрытия и повторного открытия сервера`, async () => {
   const folder = mkdtempSync(join(tmpdir(), "academy-"));
   const file = join(folder, "data.sqlite");
   let instance = await start(file);
