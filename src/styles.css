@@ -2156,3 +2156,59 @@ tr:hover td {
   filter: none;
   object-fit: contain;
 }
+
+/* Размер доски вычисляется из доступной области, без вычета фиксированных 320px. */
+@media (min-width: 641px) {
+  .board-workspace .board-layout,
+  .analysis-layout {
+    grid-template-columns: minmax(0, 1fr) clamp(250px, 27vw, 350px);
+  }
+  .board-workspace .topbar {
+    height: 36px;
+  }
+  .board-workspace .page-heading .eyebrow,
+  .board-workspace .page-heading .muted {
+    display: none;
+  }
+  .board-workspace .page-heading {
+    margin-bottom: 6px;
+  }
+  .board-workspace .board-panel > .small {
+    display: none;
+  }
+}
+@media (min-width: 641px) {
+  .board-workspace .work-count {
+    position: absolute;
+    right: 30px;
+    top: 54px;
+  }
+  .board-workspace .page-heading > .badge {
+    display: none;
+  }
+  .board-workspace .board-panel {
+    padding: 8px;
+  }
+  .board-workspace .board-player,
+  .board-workspace .board-player:has(+ .board-toolbar) {
+    min-height: 22px;
+    padding: 0;
+  }
+  .board-workspace .board-player .avatar {
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+  }
+  .board-workspace .board-toolbar {
+    padding: 4px 0 0;
+    margin: 0;
+  }
+  .board-workspace .board-toolbar button {
+    min-height: 30px;
+    padding: 5px 8px;
+  }
+  .board-workspace .save-status {
+    line-height: 14px;
+    margin: 2px 0;
+  }
+}

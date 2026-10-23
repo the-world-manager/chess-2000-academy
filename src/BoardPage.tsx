@@ -184,7 +184,7 @@ export function BoardPage() {
               key={`${state.revision}-${cursor ?? "end"}`}
               position={position}
               flipped={flipped}
-              disabled={busy}
+              disabled={busy || !atEnd || position.isGameOver()}
               lastMove={last}
               onMove={(from, to) => {
                 if (!atEnd || position.isGameOver()) return;
@@ -230,10 +230,22 @@ export function BoardPage() {
               последней позиции.
             </p>
             <p className="save-status" role="status">
-              {busy
-                ? "Сохранение…"
-                : notice ||
-                  `Сохранено (МСК): ${new Date(state.updated_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}`}
+              {!atEnd ? (
+                <>
+                  Просмотр предыдущей позиции. Для нового хода{" "}
+                  <button
+                    className="text-button"
+                    onClick={() => setCursor(null)}
+                  >
+                    К последней позиции
+                  </button>
+                </>
+              ) : busy ? (
+                "Сохранение…"
+              ) : (
+                notice ||
+                `Сохранено (МСК): ${new Date(state.updated_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}`
+              )}
             </p>
           </section>
           <div className="board-aside">
