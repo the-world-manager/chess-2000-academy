@@ -2,36 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import { Chess, type Square, type PieceSymbol, type Color } from "chess.js";
 import { api, type BoardState } from "./api";
 import { PageHeading, Modal } from "./components";
-const pieces: Record<Color, Record<PieceSymbol, string>> = {
-  w: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
-  b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
-};
-const pieceNames = {
-  k: "король",
-  q: "ферзь",
-  r: "ладья",
-  b: "слон",
-  n: "конь",
-  p: "пешка",
-};
+import { Chessboard } from "./Chessboard";
 export function BoardPage() {
   const [state, setState] = useState<BoardState>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<Square>();
   const [flipped, setFlipped] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [notice, setNotice] = useState("");
   const [promotion, setPromotion] = useState<{ from: Square; to: Square }>();
   const [resetting, setResetting] = useState(false);
+  const [mobileView, setMobileView] = useState("board");
   const load = async () => {
     setError("");
     try {
       const data = await api<BoardState>("board");
       setState(data);
       setNotes(data.notes);
-      setSelected(undefined);
       setCursor(null);
     } catch (e) {
       setError((e as Error).message);
@@ -83,9 +71,6 @@ export function BoardPage() {
       .forEach((move) => chess.move(move));
     return chess;
   }, [game, cursor]);
-  const legal = selected
-    ? position.moves({ square: selected, verbose: true })
-    : [];
   async function change(action: string, extra: Record<string, unknown> = {}) {
     if (!state || busy) return;
     setBusy(true);
@@ -98,7 +83,6 @@ export function BoardPage() {
         ...extra,
       });
       setState(result);
-      setSelected(undefined);
       setPromotion(undefined);
       setCursor(null);
       setNotice(
@@ -112,33 +96,6 @@ export function BoardPage() {
       setBusy(false);
     }
   }
-  function clickSquare(square: Square) {
-    if (busy || !atEnd || position.isGameOver()) return;
-    const piece = position.get(square);
-    if (selected === square) {
-      setSelected(undefined);
-      return;
-    }
-    if (selected) {
-      const candidate = legal.find((move) => move.to === square);
-      if (candidate) {
-        if (candidate.isPromotion())
-          setPromotion({ from: selected, to: square });
-        else void change("move", { from: selected, to: square });
-        return;
-      }
-      if (!piece || piece.color !== position.turn()) {
-        setNotice(
-          "Выберите одну из отмеченных клеток: туда можно сделать ход.",
-        );
-        return;
-      }
-    }
-    if (piece?.color === position.turn()) {
-      setSelected(square);
-      setNotice("Возможные ходы отмечены точками.");
-    }
-  }
   let status = position.turn() === "w" ? "Ход белых" : "Ход чёрных";
   if (position.isCheckmate())
     status = `Мат. Победили ${position.turn() === "w" ? "чёрные" : "белые"}.`;
@@ -149,12 +106,6 @@ export function BoardPage() {
     status = "Ничья: недостаточно материала.";
   else if (position.isDraw()) status = "Ничья по правилу 50 ходов.";
   else if (position.isCheck()) status += " · Шах";
-  const squares: Square[] = [];
-  for (let row = 0; row < 8; row++)
-    for (let col = 0; col < 8; col++)
-      squares.push(
-        `${"abcdefgh"[flipped ? 7 - col : col]}${flipped ? row + 1 : 8 - row}` as Square,
-      );
   const verbose = position.history({ verbose: true });
   const last = verbose.at(-1);
   return (
@@ -165,6 +116,39 @@ export function BoardPage() {
         text="Проверяйте идеи. Сравнивайте варианты. Сохраняйте выводы."
         action={<span className="badge">Самостоятельная работа</span>}
       />
+      <div className="work-count">
+        {" "}
+        <span className="tiny-badge">
+          {history.length}{" "}
+          {history.length % 100 >= 11 && history.length % 100 <= 14
+            ? "полуходов"
+            : history.length % 10 === 1
+              ? "полуход"
+              : [2, 3, 4].includes(history.length % 10)
+                ? "полухода"
+                : "полуходов"}
+        </span>
+      </div>
+      <div
+        className="mobile-game-tabs"
+        role="tablist"
+        aria-label="Панели рабочей доски"
+      >
+        {[
+          ["board", "Доска"],
+          ["moves", "Ходы"],
+          ["notes", "Заметки"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={mobileView === id}
+            onClick={() => setMobileView(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {error && (
         <div className="error" role="alert">
           {error}{" "}
@@ -189,51 +173,29 @@ export function BoardPage() {
           {error ? "Доска пока недоступна." : "Загрузка сохранённой позиции…"}
         </section>
       ) : (
-        <div className="board-layout">
+        <div className={`board-layout mobile-work-${mobileView}`}>
           <section className="board-panel panel">
             <div className="board-player">
               <span className="avatar">{flipped ? "Б" : "Ч"}</span>
               <strong>{flipped ? "Белые" : "Чёрные"}</strong>
               <span className="muted small">Свободная доска</span>
             </div>
-            <div
-              className="chessboard"
-              role="group"
-              aria-label="Шахматная доска"
-            >
-              {squares.map((square, index) => {
-                const piece = position.get(square);
-                const target = legal.some((move) => move.to === square);
-                const light =
-                  ("abcdefgh".indexOf(square[0]) + Number(square[1])) % 2 === 0;
-                return (
-                  <button
-                    type="button"
-                    key={square}
-                    data-square={square}
-                    className={`square ${light ? "light" : "dark"} ${selected === square ? "selected" : ""} ${last?.from === square || last?.to === square ? "last-move" : ""} ${target ? "legal" : ""}`}
-                    aria-label={`${square}${piece ? `, ${piece.color === "w" ? "белые" : "чёрные"}: ${pieceNames[piece.type]}` : ", пусто"}${target ? ", возможный ход" : ""}`}
-                    aria-pressed={selected === square}
-                    disabled={busy}
-                    onClick={() => clickSquare(square)}
-                  >
-                    {index % 8 === 0 && (
-                      <span className="rank">{square[1]}</span>
-                    )}
-                    {piece && (
-                      <span
-                        className={`piece ${piece.color === "w" ? "white-piece" : "black-piece"}`}
-                        aria-hidden="true"
-                      >
-                        {pieces[piece.color][piece.type]}
-                      </span>
-                    )}
-                    {index >= 56 && <span className="file">{square[0]}</span>}
-                    {target && !piece && <span className="move-dot" />}
-                  </button>
-                );
-              })}
-            </div>
+            <Chessboard
+              key={`${state.revision}-${cursor ?? "end"}`}
+              position={position}
+              flipped={flipped}
+              disabled={busy}
+              lastMove={last}
+              onMove={(from, to) => {
+                if (!atEnd || position.isGameOver()) return;
+                const candidate = position
+                  .moves({ square: from, verbose: true })
+                  .find((move) => move.to === to);
+                if (candidate?.isPromotion()) setPromotion({ from, to });
+                else if (candidate) void change("move", { from, to });
+              }}
+            />
+
             <div className="board-player">
               <span className="avatar">{flipped ? "Ч" : "Б"}</span>
               <strong>{flipped ? "Чёрные" : "Белые"}</strong>
@@ -244,7 +206,6 @@ export function BoardPage() {
                 className="secondary"
                 onClick={() => {
                   setFlipped(!flipped);
-                  setSelected(undefined);
                 }}
               >
                 Перевернуть
@@ -279,16 +240,6 @@ export function BoardPage() {
             <section className="panel notation">
               <div className="section-heading">
                 <h2>Ходы партии</h2>
-                <span className="tiny-badge">
-                  {history.length}{" "}
-                  {history.length % 100 >= 11 && history.length % 100 <= 14
-                    ? "полуходов"
-                    : history.length % 10 === 1
-                      ? "полуход"
-                      : [2, 3, 4].includes(history.length % 10)
-                        ? "полухода"
-                        : "полуходов"}
-                </span>
               </div>
               {history.length ? (
                 <ol className="moves">
@@ -307,7 +258,6 @@ export function BoardPage() {
                             key={j}
                             onClick={() => {
                               setCursor(i * 2 + j + 1);
-                              setSelected(undefined);
                             }}
                           >
                             {san}
@@ -329,7 +279,6 @@ export function BoardPage() {
                   disabled={!history.length}
                   onClick={() => {
                     setCursor(0);
-                    setSelected(undefined);
                   }}
                 >
                   ⇤
@@ -340,7 +289,6 @@ export function BoardPage() {
                   disabled={(cursor ?? history.length) === 0}
                   onClick={() => {
                     setCursor((cursor ?? history.length) - 1);
-                    setSelected(undefined);
                   }}
                 >
                   ←
@@ -354,7 +302,6 @@ export function BoardPage() {
                   disabled={atEnd}
                   onClick={() => {
                     setCursor((cursor ?? 0) + 1);
-                    setSelected(undefined);
                   }}
                 >
                   →
@@ -365,7 +312,6 @@ export function BoardPage() {
                   disabled={atEnd}
                   onClick={() => {
                     setCursor(null);
-                    setSelected(undefined);
                   }}
                 >
                   ⇥
@@ -405,16 +351,13 @@ export function BoardPage() {
               </div>
             </section>
             <section className="panel engine-info">
-              <span className="tiny-badge">ЭТАП 2</span>
               <h2>Анализ Stockfish</h2>
               <p className="muted">
-                Движок ещё не подключён. Оценки и лучшие варианты не
-                рассчитываются.
+                Откройте импортированную партию для анализа в браузере.
               </p>
-              <p className="small muted">
-                Глубокий анализ будет запускаться только по кнопке
-                «Анализировать партию».
-              </p>
+              <a href="#games" className="text-button">
+                Мои партии →
+              </a>
             </section>
           </div>
         </div>
@@ -436,7 +379,7 @@ export function BoardPage() {
                   void change("move", { ...promotion, promotion: piece })
                 }
               >
-                {pieceNames[piece]}
+                {{ q: "ферзь", r: "ладья", b: "слон", n: "конь" }[piece]}
               </button>
             ))}
           </div>

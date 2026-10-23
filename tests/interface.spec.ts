@@ -40,17 +40,30 @@ test("Вход, доска, нотация, заметки, повторный �
       .getByRole("dialog")
       .getByRole("button", { name: "Начать заново", exact: true })
       .click();
-    await expect(page.getByText("0 полуходов")).toBeVisible();
+    await expect(page.locator('[data-square="e2"]')).toHaveAttribute(
+      "aria-label",
+      /пешка/,
+    );
   }
   await page.locator('[data-square="e2"]').click();
   await expect(page.locator('[data-square="e4"]')).toHaveClass(/legal/);
   await page.locator('[data-square="e4"]').click();
+  if (await page.getByRole("tab", { name: "Ходы", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Ходы", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "e4", exact: true }),
   ).toBeVisible();
+  if (await page.getByRole("tab", { name: "Доска", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Доска", exact: true }).click();
   await page.locator('[data-square="e7"]').click();
   await page.locator('[data-square="e5"]').click();
+  if (await page.getByRole("tab", { name: "Ходы", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Ходы", exact: true }).click();
   await expect(page.getByText("2 полухода")).toBeVisible();
+  if (await page.getByRole("tab", { name: "Доска", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Доска", exact: true }).click();
+  if (await page.getByRole("tab", { name: "Ходы", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Ходы", exact: true }).click();
   await page
     .getByRole("button", { name: "Предыдущий ход", exact: true })
     .click();
@@ -61,14 +74,22 @@ test("Вход, доска, нотация, заметки, повторный �
   await page
     .getByRole("button", { name: "В конец партии", exact: true })
     .click();
+  if (await page.getByRole("tab", { name: "Заметки", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Заметки", exact: true }).click();
   await page.getByLabel("Какие ходы вы рассматривали и почему?").fill(note);
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(page.getByText("Все заметки сохранены")).toBeVisible();
   await page.reload();
+  if (await page.getByRole("tab", { name: "Заметки", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Заметки", exact: true }).click();
   await expect(
     page.getByLabel("Какие ходы вы рассматривали и почему?"),
   ).toHaveValue(note);
+  if (await page.getByRole("tab", { name: "Ходы", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Ходы", exact: true }).click();
   await expect(page.getByText("2 полухода")).toBeVisible();
+  if (await page.getByRole("tab", { name: "Доска", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Доска", exact: true }).click();
   await page.getByRole("button", { name: "Перевернуть", exact: true }).click();
   await expect(page.locator(".square").first()).toHaveAttribute(
     "data-square",
@@ -91,7 +112,11 @@ test("Вход, доска, нотация, заметки, повторный �
     .fill("long-secure-chess-password");
   await page.getByRole("button", { name: "Войти", exact: true }).click();
   await page.getByRole("link", { name: "Анализ партии", exact: false }).click();
+  if (await page.getByRole("tab", { name: "Ходы", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Ходы", exact: true }).click();
   await expect(page.getByText("2 полухода")).toBeVisible();
+  if (await page.getByRole("tab", { name: "Доска", exact: true }).isVisible())
+    await page.getByRole("tab", { name: "Доска", exact: true }).click();
   expect(errors).toEqual([]);
 });
 

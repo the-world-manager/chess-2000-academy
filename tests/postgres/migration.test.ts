@@ -46,6 +46,23 @@ test("SQLite → PostgreSQL: профиль, пароль, PGN/FEN, заметк
     "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,$3)",
     ["old-token-hash", 37, Date.now() + 60000],
   );
+  await old.query(
+    "INSERT INTO games(id,user_id,source_key,source_url,ended_at,opponent,color,result,time_class,time_control,pgn,imported_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+    [
+      "migrated-game",
+      37,
+      "migration-test",
+      "https://www.chess.com/game/live/1",
+      1792713600,
+      "Контроль миграции",
+      "w",
+      "draw",
+      "rapid",
+      "900+10",
+      chess.pgn(),
+      now,
+    ],
+  );
   await old.close();
   const before = readFileSync(source);
   const target = await testPostgres();
@@ -65,6 +82,14 @@ test("SQLite → PostgreSQL: профиль, пароль, PGN/FEN, заметк
     assert.equal(
       (await target.query("SELECT fen FROM board_states")).rows[0].fen,
       chess.fen(),
+    );
+    assert.equal(
+      (
+        await target.query("SELECT pgn FROM games WHERE id=$1", [
+          "migrated-game",
+        ])
+      ).rows[0].pgn,
+      chess.pgn(),
     );
     const application = await createApplication(target);
     const server = createServer(application.app);
@@ -106,7 +131,7 @@ test("PostgreSQL: миграции повторяемы, транзакция о
     await migrate(db);
     assert.equal(
       (await db.query("SELECT COUNT(*) AS n FROM schema_migrations")).rows[0].n,
-      "1",
+      "2",
     );
     await assert.rejects(() =>
       db.transaction(async (tx) => {

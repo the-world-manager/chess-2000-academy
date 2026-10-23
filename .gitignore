@@ -9,3 +9,7 @@ playwright-report/
 dist-worker/
 .env.*
 !.env.example
+public/engine/stockfish-19-lite-single.js
+public/engine/stockfish-19-lite-single.wasm
+public/engine/ЛИЦЕНЗИЯ.txt
+.verification/

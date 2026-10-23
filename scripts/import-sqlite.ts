@@ -24,6 +24,45 @@ const columns = {
   ],
   board_states: ["user_id", "pgn", "fen", "notes", "revision", "updated_at"],
   sessions: ["token_hash", "user_id", "expires_at"],
+  chess_accounts: [
+    "user_id",
+    "profile_json",
+    "stats_json",
+    "last_sync",
+    "next_retry_at",
+  ],
+  games: [
+    "id",
+    "user_id",
+    "source_key",
+    "source_url",
+    "ended_at",
+    "opponent",
+    "color",
+    "result",
+    "time_class",
+    "time_control",
+    "rating",
+    "opponent_rating",
+    "opening",
+    "pgn",
+    "imported_at",
+  ],
+  game_analyses: ["game_id", "user_id", "result_json", "status", "updated_at"],
+  archive_sync: ["user_id", "time_class", "archive", "synced_at"],
+  sync_jobs: [
+    "user_id",
+    "job_id",
+    "time_class",
+    "queue_json",
+    "cursor",
+    "total",
+    "imported",
+    "skipped",
+    "lease_until",
+    "state",
+  ],
+  auth_attempts: ["client_hash", "attempts", "expires_at"],
 } as const;
 export async function importSqlite(source: string, target: Storage) {
   if (target.kind !== "postgres")
@@ -32,19 +71,21 @@ export async function importSqlite(source: string, target: Storage) {
   const snapshot: Record<string, Row[]> = {};
   try {
     db.exec("BEGIN");
-    for (const [table, fields] of Object.entries(columns))
-      snapshot[table] = db
-        .prepare(`SELECT ${fields.join(",")} FROM ${table}`)
-        .all() as Row[];
+    for (const [table, fields] of Object.entries(columns)) {
+      const exists = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+        .get(table);
+      snapshot[table] = exists
+        ? (db
+            .prepare(`SELECT ${fields.join(",")} FROM ${table}`)
+            .all() as Row[])
+        : [];
+    }
     db.exec("COMMIT");
   } finally {
     db.close();
   }
-  if (
-    snapshot.users.length === 0 &&
-    snapshot.board_states.length === 0 &&
-    snapshot.sessions.length === 0
-  )
+  if (Object.values(snapshot).every((rows) => rows.length === 0))
     return { users: 0, boards: 0, sessions: 0, verified: true };
   if (
     snapshot.users.length !== 1 ||

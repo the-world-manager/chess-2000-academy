@@ -136,30 +136,36 @@ export function postgresStorage(
   };
 }
 export async function migrate(storage: Storage) {
-  const schema = readFileSync(
-    new URL("../migrations/001_foundation.sql", import.meta.url),
-    "utf8",
-  );
+  const migrations = [
+    [1, "001_foundation.sql"],
+    [2, "002_games.sql"],
+  ] as const;
   await storage.transaction(async (tx) => {
     if (storage.kind === "postgres")
       await tx.query("SELECT pg_advisory_xact_lock(20001437)");
     await tx.query(
       "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)",
     );
-    const { rows } = await tx.query(
-      "SELECT version FROM schema_migrations WHERE version=$1",
-      [1],
-    );
-    if (!rows.length) {
-      for (const statement of schema
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean))
-        await tx.query(statement);
-      await tx.query(
-        "INSERT INTO schema_migrations(version,applied_at) VALUES($1,$2)",
-        [1, new Date().toISOString()],
+    for (const [version, file] of migrations) {
+      const { rows } = await tx.query(
+        "SELECT version FROM schema_migrations WHERE version=$1",
+        [version],
       );
+      if (!rows.length) {
+        const schema = readFileSync(
+          new URL(`../migrations/${file}`, import.meta.url),
+          "utf8",
+        );
+        for (const statement of schema
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean))
+          await tx.query(statement);
+        await tx.query(
+          "INSERT INTO schema_migrations(version,applied_at) VALUES($1,$2)",
+          [version, new Date().toISOString()],
+        );
+      }
     }
   });
 }

@@ -1,5 +1,5 @@
 import EmbeddedPostgres from "embedded-postgres";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -60,6 +60,7 @@ try {
       "--test",
       "tests/api.test.ts",
       "tests/security.test.ts",
+      "tests/stage2.test.ts",
       "tests/postgres/*.test.ts",
     ],
     env,
@@ -77,6 +78,28 @@ try {
       ...env,
       E2E_DATABASE_URL: browserUrl.toString(),
     });
+  }
+  if (status === 0 && existsSync(".verification/real-chesscom.json")) {
+    const admin = postgresStorage(url, true);
+    try {
+      await admin.query("CREATE SCHEMA browser_live");
+    } finally {
+      await admin.close();
+    }
+    const liveUrl = new URL(url);
+    liveUrl.searchParams.set("options", "-c search_path=browser_live");
+    console.log(
+      "Проверка реальной записанной партии Chess.com и настоящего Stockfish с PostgreSQL.",
+    );
+    status = await run(
+      [
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "--config",
+        "playwright.live.config.ts",
+      ],
+      { ...env, E2E_DATABASE_URL: liveUrl.toString() },
+    );
   }
   process.exitCode = status;
 } catch {

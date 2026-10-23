@@ -1,3 +1,5 @@
+import { attachGames } from "./games.js";
+import type { ChessFetcher } from "./chesscom.js";
 import express, {
   type Request,
   type Response,
@@ -42,6 +44,7 @@ export interface AppOptions {
   publicDeployment?: boolean;
   ownerLogin?: string;
   ownerPassword?: string;
+  chessFetcher?: ChessFetcher;
 }
 function validOwner(login: unknown, password: unknown): login is string {
   return (
@@ -100,6 +103,7 @@ export async function createApplication(
   const app = express();
   app.disable("x-powered-by");
   if (opts.publicDeployment) app.set("trust proxy", 1);
+  app.use("/api/games/:id/analysis", express.json({ limit: "768kb" }));
   app.use(express.json({ limit: "32kb" }));
   app.use("/api", (req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
@@ -344,6 +348,7 @@ export async function createApplication(
       throw new HttpError(409, "Позиция уже изменена. Обновите доску.");
     res.json(result.rows[0]);
   });
+  attachGames(app, db, authorize, opts.chessFetcher);
   app.use("/api", (_req, res) =>
     res.status(404).json({ error: "Такой запрос не поддерживается." }),
   );

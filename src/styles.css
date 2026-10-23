@@ -1228,3 +1228,871 @@ footer {
   display: inline-flex;
   vertical-align: middle;
 }
+
+/* Этап 2: компактное рабочее место. Длинные списки прокручиваются внутри панели. */
+select {
+  font: inherit;
+  color: #f9fafb;
+  background: #111827;
+  border: 1px solid #445165;
+  border-radius: 6px;
+  padding: 8px;
+  max-width: 100%;
+}
+select:focus-visible {
+  outline: 3px solid #6ee7b7;
+  outline-offset: 2px;
+}
+.piece-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 1px #0005);
+  pointer-events: none;
+}
+.square {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.square .piece {
+  width: 90%;
+  height: 90%;
+  display: block;
+  pointer-events: none;
+}
+.square .drag-source {
+  opacity: 0.25;
+}
+.dragged-piece {
+  position: fixed;
+  width: 75px;
+  height: 75px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 100;
+}
+.board-workspace {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.board-workspace .topbar {
+  height: 48px;
+  flex-shrink: 0;
+}
+.board-workspace footer {
+  display: none;
+}
+.board-workspace .content {
+  padding: 14px 20px;
+  min-height: 0;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.board-workspace .page-heading {
+  margin-bottom: 12px;
+  gap: 12px;
+}
+.board-workspace .page-heading h1 {
+  font-size: 26px;
+  margin-bottom: 4px;
+}
+.board-workspace .page-heading .eyebrow {
+  margin-bottom: 5px;
+  font-size: 9px;
+}
+.board-workspace .board-layout {
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 1fr);
+  gap: 16px;
+}
+.board-workspace .board-panel {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.board-workspace .board-panel > .chessboard {
+  width: min(100%, calc(100dvh - 320px));
+  flex-shrink: 0;
+}
+.board-workspace .board-player {
+  width: 100%;
+  padding: 4px 0 8px;
+  min-height: 30px;
+  gap: 8px;
+}
+.board-workspace .board-player .avatar {
+  width: 25px;
+  height: 25px;
+}
+.board-workspace .board-player:has(+ .board-toolbar) {
+  padding: 8px 0;
+}
+.board-workspace .board-toolbar {
+  margin-bottom: 5px;
+  padding-top: 6px;
+  width: 100%;
+  flex-shrink: 0;
+}
+.board-workspace .board-panel > .small {
+  font-size: 10px;
+  margin-bottom: 3px;
+  align-self: flex-start;
+}
+.board-workspace .save-status {
+  font-size: 10px;
+  align-self: flex-start;
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.board-workspace .board-aside {
+  height: 100%;
+  min-height: 0;
+  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.board-workspace .board-aside .panel {
+  padding: 14px;
+}
+.board-workspace .board-aside .notation {
+  flex: 1;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+.board-workspace .board-aside .moves {
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  flex: 1;
+}
+.board-workspace .board-aside .notes textarea {
+  height: 75px;
+  min-height: 50px;
+  resize: vertical;
+  padding: 9px;
+}
+.board-workspace .board-aside .notes label {
+  margin-bottom: 4px;
+}
+.board-workspace .board-aside .notes h2 {
+  margin-bottom: 6px;
+}
+.board-workspace .engine-info p {
+  margin: 5px 0;
+  font-size: 11px;
+}
+.board-workspace .engine-info h2 {
+  font-size: 14px;
+  margin: 0;
+}
+.imported-game {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.game-heading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.game-heading a {
+  color: #6ee7b7;
+}
+.game-heading > span {
+  margin-left: auto;
+  color: #9ca3af;
+}
+.analysis-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+.play-surface {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 12px;
+}
+.play-surface .chessboard {
+  width: min(100%, calc(100dvh - 240px));
+  flex-shrink: 0;
+}
+.play-surface .board-player > span:last-child {
+  margin-left: auto;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.board-hint {
+  margin: 0;
+  font-size: 10px;
+  align-self: flex-start;
+}
+.analysis-aside {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.engine-controls {
+  padding: 15px;
+  flex-shrink: 0;
+}
+.engine-controls h2 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+.analysis-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analysis-actions label {
+  font-size: 10px;
+  color: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.analysis-actions select {
+  font-size: 11px;
+  padding: 8px;
+}
+.analysis-actions button {
+  font-size: 11px;
+  padding: 9px 12px;
+}
+progress {
+  width: 100%;
+  height: 8px;
+  accent-color: #10b981;
+  margin-top: 10px;
+}
+.analysis-details {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+}
+.panel-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #374151;
+  padding-bottom: 9px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.panel-tabs button {
+  font-size: 12px;
+  color: #9ca3af;
+  background: transparent;
+  padding: 6px 12px;
+}
+.panel-tabs button[aria-selected="true"] {
+  background: #10b98122;
+  color: #6ee7b7;
+}
+.detail-scroll {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+}
+.detail-scroll .moves {
+  max-height: none;
+  min-height: 0;
+}
+.evaluation-chart svg {
+  width: 100%;
+  height: auto;
+  max-height: 125px;
+  background: #11182760;
+  border-radius: 6px;
+}
+.evaluation-chart small {
+  display: block;
+  color: #9ca3af;
+  font-size: 9px;
+  margin-bottom: 14px;
+}
+.evaluation-chart circle:hover,
+.evaluation-chart circle:focus {
+  fill: #10b981;
+  outline: none;
+}
+.evaluation-chart circle {
+  cursor: pointer;
+}
+.engine-pv {
+  font-family: monospace;
+  line-height: 1.8;
+  font-size: 14px;
+  background: #111827;
+  padding: 10px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.critical {
+  padding: 10px 0;
+  border-bottom: 1px solid #374151;
+}
+.critical p {
+  font-size: 12px;
+  line-height: 1.7;
+  margin-bottom: 8px;
+}
+.critical .text-button {
+  text-align: left;
+  font-size: 13px;
+}
+.games-meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: -10px 0 20px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.games-meta strong {
+  color: #6ee7b7;
+}
+.sync-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 15px;
+  font-size: 12px;
+  color: #6ee7b7;
+}
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10px;
+  color: #9ca3af;
+}
+.filters input,
+.filters select {
+  font-size: 12px;
+  padding: 8px;
+}
+.games-list {
+  padding: 12px 18px;
+}
+.games-table {
+  overflow: auto;
+  max-height: calc(100dvh - 350px);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+th {
+  text-align: left;
+  color: #9ca3af;
+  font-size: 10px;
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+  background: #1f2937;
+  z-index: 1;
+}
+td,
+th {
+  padding: 12px 10px;
+  border-bottom: 1px solid #344054;
+}
+tr:hover td {
+  background: #10b98108;
+}
+.game-link {
+  color: #6ee7b7;
+  font-weight: 600;
+}
+.result-win {
+  color: #6ee7b7;
+}
+.result-loss {
+  color: #fca5a5;
+}
+.result-draw {
+  color: #cbd5e1;
+}
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+@media (min-width: 951px) and (max-height: 850px) {
+  .topbar {
+    height: 55px;
+  }
+  .content {
+    padding: 22px 28px;
+  }
+  .page-heading {
+    margin-bottom: 18px;
+  }
+  .page-heading h1 {
+    font-size: 27px;
+  }
+  .stats-grid {
+    margin-bottom: 16px;
+  }
+  .stat {
+    padding: 14px 18px;
+  }
+  .stat p {
+    margin-bottom: 8px;
+  }
+  .stat strong {
+    font-size: 26px;
+    margin-bottom: 8px;
+  }
+  .home-grid {
+    gap: 16px;
+  }
+  .home-grid .panel {
+    padding: 18px;
+  }
+  .hero {
+    min-height: 210px;
+  }
+  .hero h2 {
+    font-size: 25px;
+    margin-top: 12px;
+    margin-bottom: 10px;
+  }
+  .hero p {
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+  .hero-foot {
+    display: none;
+  }
+  .hero-chess {
+    font-size: 130px;
+    top: 20px;
+  }
+  .goal h2 {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+  .goal-numbers {
+    margin: 8px 0 16px;
+  }
+  .goal-line {
+    margin-bottom: 10px;
+  }
+  .home-grid .empty {
+    padding: 10px;
+  }
+  .empty > span {
+    height: 30px;
+    width: 30px;
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+  .empty h3 {
+    font-size: 13px;
+  }
+  .empty p {
+    font-size: 11px;
+  }
+  .coach-message {
+    margin: 14px 0;
+  }
+  .coach-message p {
+    font-size: 12px;
+  }
+  .board-workspace .content {
+    padding: 12px 16px;
+  }
+}
+@media (max-width: 950px) {
+  .analysis-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 0.9fr);
+    gap: 12px;
+  }
+  .board-workspace .board-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.9fr);
+  }
+  .analysis-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .analysis-aside .panel {
+    padding: 12px;
+  }
+  .play-surface .chessboard {
+    width: min(100%, calc(100dvh - 250px));
+  }
+  .play-surface {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 640px) {
+  .board-workspace {
+    height: calc(100dvh - 94px);
+  }
+  .board-workspace .topbar {
+    display: none;
+  }
+  .board-workspace .content {
+    padding: 10px;
+    overflow: auto;
+  }
+  .board-workspace .page-heading {
+    margin-bottom: 8px;
+    display: block;
+  }
+  .board-workspace .page-heading .eyebrow,
+  .board-workspace .page-heading .muted,
+  .board-workspace .page-heading > .badge {
+    display: none;
+  }
+  .board-workspace .page-heading h1 {
+    font-size: 21px;
+    margin: 0;
+  }
+  .board-workspace .board-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .board-workspace .board-panel {
+    height: auto;
+    flex-shrink: 0;
+    padding: 8px;
+  }
+  .board-workspace .board-panel > .chessboard {
+    width: min(100%, calc(100dvh - 370px));
+  }
+  .board-workspace .board-player {
+    padding: 2px 0 5px;
+    min-height: 22px;
+  }
+  .board-workspace .board-player .avatar {
+    display: none;
+  }
+  .board-workspace .board-player:has(+ .board-toolbar) {
+    padding: 5px 0;
+  }
+  .board-workspace .board-aside {
+    display: flex;
+    overflow: auto;
+    min-height: 130px;
+  }
+  .board-workspace .board-aside .panel {
+    padding: 10px;
+  }
+  .board-workspace .board-aside .notation {
+    min-height: 125px;
+  }
+  .board-workspace .engine-info {
+    display: none;
+  }
+  .board-workspace .board-panel > .small {
+    display: none;
+  }
+  .board-workspace .board-toolbar {
+    margin: 0;
+    padding-top: 5px;
+  }
+  .board-workspace .board-toolbar button {
+    min-height: 30px;
+    padding: 5px 8px;
+  }
+  .board-workspace .board-aside .notes textarea {
+    height: 55px;
+  }
+  .game-heading {
+    gap: 7px;
+    font-size: 10px;
+    margin-bottom: 8px;
+  }
+  .game-heading strong {
+    font-size: 11px;
+  }
+  .analysis-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+  .play-surface {
+    padding: 8px;
+    flex-shrink: 0;
+  }
+  .play-surface .chessboard {
+    width: min(100%, calc(100dvh - 400px));
+  }
+  .play-surface .board-player {
+    font-size: 10px;
+    min-height: 20px;
+    padding: 2px 0 4px;
+  }
+  .board-hint {
+    display: none;
+  }
+  .analysis-aside {
+    gap: 8px;
+    flex: 1;
+    min-height: 160px;
+  }
+  .engine-controls {
+    padding: 10px;
+  }
+  .engine-controls h2 {
+    display: none;
+  }
+  .analysis-actions {
+    flex-direction: row;
+    gap: 6px;
+  }
+  .analysis-actions label {
+    font-size: 9px;
+  }
+  .analysis-actions button {
+    padding: 8px;
+    font-size: 10px;
+  }
+  .analysis-details {
+    min-height: 135px;
+    padding: 8px;
+  }
+  .panel-tabs {
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+  }
+  .panel-tabs button {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  .evaluation-chart svg {
+    max-height: 85px;
+  }
+  .analysis-details h3 {
+    font-size: 13px;
+  }
+  .engine-pv {
+    font-size: 11px;
+    padding: 6px;
+  }
+  .games-meta {
+    font-size: 11px;
+    gap: 8px;
+    margin-top: 0;
+    margin-bottom: 14px;
+  }
+  .filters {
+    gap: 8px;
+  }
+  .filters label {
+    flex: 1;
+    min-width: 100px;
+  }
+  .filters input,
+  .filters select {
+    width: 100%;
+  }
+  .games-table {
+    max-height: calc(100dvh - 440px);
+    min-height: 160px;
+  }
+  .games-list {
+    padding: 10px;
+  }
+  .pagination {
+    font-size: 10px;
+    gap: 6px;
+  }
+  .pagination button {
+    font-size: 10px;
+    padding: 7px;
+  }
+  .sync-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .board-workspace .error {
+    font-size: 10px;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .dragged-piece {
+    width: 50px;
+    height: 50px;
+  }
+}
+.mobile-game-tabs {
+  display: none;
+}
+@media (max-width: 640px) {
+  .board-workspace .content {
+    overflow: hidden;
+  }
+  .mobile-game-tabs {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 6px;
+  }
+  .mobile-game-tabs button {
+    flex: 1;
+    padding: 6px 8px;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 11px;
+  }
+  .mobile-game-tabs button[aria-selected="true"] {
+    background: #10b98122;
+    color: #6ee7b7;
+  }
+  .board-workspace .board-layout.mobile-work-board {
+    flex: 1;
+  }
+  .board-workspace .mobile-work-board .board-panel > .chessboard {
+    width: min(100%, calc(100dvh - 300px));
+  }
+  .board-workspace .mobile-work-board .board-aside {
+    display: none;
+  }
+  .board-workspace .mobile-work-moves .board-panel,
+  .board-workspace .mobile-work-notes .board-panel {
+    display: none;
+  }
+  .board-workspace .mobile-work-moves .notes,
+  .board-workspace .mobile-work-notes .notation {
+    display: none;
+  }
+  .board-workspace .mobile-work-moves .board-aside,
+  .board-workspace .mobile-work-notes .board-aside {
+    flex: 1;
+    height: 100%;
+    overflow: hidden;
+  }
+  .board-workspace .mobile-work-moves .notation,
+  .board-workspace .mobile-work-notes .notes {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .board-workspace .mobile-work-notes .notes textarea {
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .imported-game .analysis-aside {
+    min-height: 0;
+  }
+  .imported-game .analysis-details {
+    min-height: 0;
+  }
+  .imported-game .panel-tabs {
+    display: none;
+  }
+  .mobile-game-board .analysis-details {
+    display: none;
+  }
+  .mobile-game-board .play-surface .chessboard {
+    width: min(100%, calc(100dvh - 380px));
+  }
+  .mobile-game-board .analysis-aside {
+    flex: 0;
+  }
+  .mobile-game-board .analysis-layout {
+    justify-content: flex-start;
+  }
+  .mobile-game-moves .play-surface,
+  .mobile-game-analysis .play-surface,
+  .mobile-game-critical .play-surface {
+    display: none;
+  }
+  .mobile-game-moves .analysis-aside,
+  .mobile-game-analysis .analysis-aside,
+  .mobile-game-critical .analysis-aside {
+    height: 100%;
+  }
+  .evaluation-chart svg {
+    max-height: 160px;
+  }
+}
+.work-count {
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.work-count .tiny-badge {
+  font-size: 10px;
+}
+@media (max-width: 640px) {
+  .work-count {
+    position: absolute;
+    right: 15px;
+    margin: 2px 0 0;
+  }
+  .board-workspace .mobile-work-board .board-panel > .chessboard {
+    width: min(100%, calc(100dvh - 325px));
+  }
+}
+@media (max-width: 640px) {
+  .app:has(.board-workspace) {
+    height: 100dvh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .app:has(.board-workspace) > .sidebar {
+    flex-shrink: 0;
+  }
+  .board-workspace {
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  .mobile-game-board .analysis-aside {
+    display: none;
+  }
+  .mobile-game-board .play-surface .chessboard {
+    width: min(100%, calc(100dvh - 280px));
+  }
+}

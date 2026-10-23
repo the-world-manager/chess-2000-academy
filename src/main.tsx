@@ -3,13 +3,16 @@ import { createRoot } from "react-dom/client";
 import { api, type Profile } from "./api";
 import { PageHeading, Empty, ArrowUpRight } from "./components";
 import { BoardPage } from "./BoardPage";
+import { GamesPage } from "./GamesPage";
+import { GamePage } from "./GamePage";
+import type { ChessMeta } from "./GamesPage";
 import "./styles.css";
 
 const pages = [
   ["home", "Главная", "◈"],
   ["today", "Сегодня", "◷"],
   ["plan", "Годовой план", "▤"],
-  ["games", "Журнал партий", "▦"],
+  ["games", "Мои партии", "▦"],
   ["board", "Анализ партии", "♞"],
   ["training", "Тренажёры", "◎"],
   ["openings", "Дебюты", "♜"],
@@ -152,11 +155,16 @@ function Auth({
 }
 function Workspace({ onLogout }: { onLogout: () => void }) {
   const getPage = (): Page =>
-    pages.some(([id]) => id === location.hash.slice(1))
-      ? (location.hash.slice(1) as Page)
-      : "home";
+    location.hash.startsWith("#game/")
+      ? "board"
+      : pages.some(([id]) => id === location.hash.slice(1))
+        ? (location.hash.slice(1) as Page)
+        : "home";
   const [page, setPage] = useState<Page>(getPage);
   const [profile, setProfile] = useState<Profile>();
+  const [gameId, setGameId] = useState(() =>
+    location.hash.startsWith("#game/") ? location.hash.slice(6) : null,
+  );
   const [error, setError] = useState("");
   const loadProfile = () => {
     setError("");
@@ -166,7 +174,12 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
   };
   useEffect(() => {
     loadProfile();
-    const handler = () => setPage(getPage());
+    const handler = () => {
+      setPage(getPage());
+      setGameId(
+        location.hash.startsWith("#game/") ? location.hash.slice(6) : null,
+      );
+    };
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
   }, []);
@@ -220,7 +233,7 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
           </div>
         </div>
       </aside>
-      <div className="workspace">
+      <div className={`workspace ${page === "board" ? "board-workspace" : ""}`}>
         <header className="topbar">
           <span>
             Личная академия{" "}
@@ -229,7 +242,7 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
             </span>
           </span>
           <span className="stage">
-            <i /> Первый этап · Основа
+            <i /> Второй этап · Партии и анализ
           </span>
         </header>
         <main id="main" className="content" tabIndex={-1}>
@@ -243,8 +256,14 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
           )}
           {page === "home" ? (
             <Home profile={profile} navigate={navigate} />
+          ) : page === "games" ? (
+            <GamesPage />
           ) : page === "board" ? (
-            <BoardPage />
+            gameId ? (
+              <GamePage key={gameId} id={gameId} />
+            ) : (
+              <BoardPage />
+            )
           ) : page === "settings" ? (
             <>
               <PageHeading
@@ -265,7 +284,7 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
                   <dd>Постоянная серверная база данных</dd>
                 </dl>
                 <p className="muted">
-                  Актуальный рейтинг появится после подключения Chess.com. В
+                  Данные Chess.com обновляются вручную в разделе «Мои партии». В
                   этой версии доступен один аккаунт владельца.
                 </p>
                 <button
@@ -302,6 +321,12 @@ function Home({
   profile?: Profile;
   navigate: (id: Page) => void;
 }) {
+  const [chessMeta, setChessMeta] = useState<ChessMeta>();
+  useEffect(() => {
+    api<ChessMeta>("chess")
+      .then(setChessMeta)
+      .catch(() => {});
+  }, []);
   return (
     <>
       <PageHeading
@@ -319,7 +344,13 @@ function Home({
       />
       <div className="stats-grid">
         {[
-          ["Rapid-рейтинг", "—", "Chess.com ещё не подключён"],
+          [
+            "Rapid-рейтинг",
+            chessMeta?.rapid?.last?.rating?.toString() || "—",
+            chessMeta?.rapid?.last
+              ? "Последнее обновление Chess.com"
+              : "Нажмите «Синхронизировать» в «Моих партиях»",
+          ],
           [
             "Целевой рейтинг",
             String(profile?.target_rating || 2000),
@@ -374,7 +405,9 @@ function Home({
           </div>
           <div className="goal-line" />
           <p className="muted">
-            Для расчёта текущего прогресса нужен актуальный рейтинг Chess.com.
+            {chessMeta?.rapid?.last
+              ? `Текущий Rapid: ${chessMeta.rapid.last.rating}. До цели: ${Math.max(0, 2000 - chessMeta.rapid.last.rating)} пунктов.`
+              : "Для расчёта текущего прогресса синхронизируйте профиль Chess.com."}
           </p>
           <p className="small muted">
             Рейтинговая цель — ориентир, а не гарантия роста.
@@ -389,8 +422,16 @@ function Home({
           </div>
           <Empty
             icon="▦"
-            title="История начинается с первой партии"
-            text="Импорт Chess.com появится на втором этапе. Здесь будут только ваши реальные партии."
+            title={
+              chessMeta?.counts.rapid
+                ? "Ваши партии готовы к разбору"
+                : "История начинается с первой партии"
+            }
+            text={
+              chessMeta?.counts.rapid
+                ? `Сохранено ${chessMeta.counts.rapid} Rapid-партий. Откройте журнал для просмотра и анализа.`
+                : "Загрузите реальные партии кнопкой «Синхронизировать» в разделе «Мои партии»."
+            }
           />
         </section>
         <section className="panel">

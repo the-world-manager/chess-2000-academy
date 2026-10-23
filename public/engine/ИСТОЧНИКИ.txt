@@ -1,0 +1,9 @@
+Stockfish 19 Lite, однопоточная WebAssembly-сборка stockfish.js 19.0.1.
+Лицензия движка: GNU GPL v3. Полный текст: /engine/ЛИЦЕНЗИЯ.txt.
+Исходный код точной версии: /engine/stockfish-19.0.1-source.tar.gz.
+Оригинальный репозиторий и инструкция сборки:
+https://github.com/nmrugg/stockfish.js/tree/v19.0.1
+Команда сборки: ./build.js --single-threaded --lite
+Требуется Emscripten 6.0.9, как указано в README исходного проекта.
+Используются неизменённые файлы npm stockfish@19.0.1, без серверного выполнения.
+Это самостоятельный движок в Web Worker, связанный с приложением протоколом UCI.

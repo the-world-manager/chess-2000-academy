@@ -7,14 +7,16 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "node --env-file-if-exists=.env --import tsx server/index.ts",
-    "build": "tsc --noEmit && vite build",
+    "dev": "npm run prepare:engine && node --env-file-if-exists=.env --import tsx server/index.ts",
+    "build": "npm run prepare:engine && tsc --noEmit && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "test:postgres": "tsx scripts/test-postgres.ts",
     "db:migrate": "node --env-file-if-exists=.env --import tsx scripts/migrate.ts",
-    "db:import-sqlite": "node --env-file-if-exists=.env --import tsx scripts/import-sqlite.ts"
+    "db:import-sqlite": "node --env-file-if-exists=.env --import tsx scripts/import-sqlite.ts",
+    "prepare:engine": "tsx scripts/prepare-engine.ts",
+    "test:live": "NODE_USE_ENV_PROXY=1 tsx scripts/test-live-chess.ts && playwright test --config playwright.live.config.ts"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
@@ -22,6 +24,7 @@
     "pg": "^8.23.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "stockfish": "19.0.1",
     "tsx": "^4.20.6"
   },
   "devDependencies": {
